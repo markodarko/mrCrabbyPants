@@ -372,7 +372,7 @@ var levels = {
 	'...1.......ww1...',
 	'...1..11...ww1...',
 	'...1.......ww1...',
-	'...11......ww1...',
+	'...1.......ww1...',
 	'...11.....1ww1...',
 	'...11......ww1...',
 	'...11..111.ww1...',
@@ -411,9 +411,10 @@ var levels = {
 	3:BuildLevel(
 	[
 	'...11.......11...',
-	'...11.......11...',
+	'...11.m.....11...',
 	'...11c.m....11...',
-	'...11m.....111...',
+	'...11m......11...',
+	'...11......111...',
 	'...11....mm111...',
 	'...11.......w1...',
 	'...11m.....1w1...',
@@ -429,8 +430,8 @@ var levels = {
 	'...11.......11...',
 	'...11.......11...',
 	'...111.....111...',
-	'...111.....111...',
-	'.....1.....1.....'
+	'...111.....111...'
+	
 	],3),
 	
 	4:BuildLevel(
@@ -443,7 +444,7 @@ var levels = {
 	'....1........m...',
 	'm...1............',
 	'..........m......',
-	'..c..............',
+	'..c........m.....',
 	'...m........1....',
 	'.......m.........',
 	'.................',
@@ -500,12 +501,12 @@ var levels = {
 	'1111111...1111111',
 	'1...............1',
 	'1...111111111...1',
-	'1.....m..m......1',
+	'1......m.m......1',
 	'1mm1.........1mm1',
 	'1...............1',
 	'1.....1...1.....1',
-	'1...............1',
-	'1...............1'
+	'1111111...1111111',
+	'1.....1...1......'
 	]),
 	7:BuildLevel(
 	[
@@ -569,10 +570,10 @@ var levels = {
 	'1.1m...........Bm',
 	'1BBB....m......Bm',
 	'.1m.......m....Bm',
-	'.1m...........m1.',
-	'.1m...........11.',
-	'.11...........m1.',
-	'.1m......m....m1.',
+	'.1m...........m11',
+	'.1m...........Bm1',
+	'.11............m1',
+	'.1m......m.c..m11',
 	'.11.......11mm11.',
 	'..1.......11111..',
 	'..1111....11111..',
@@ -580,7 +581,7 @@ var levels = {
 	]),
 	10:BuildLevel(
 	[
-	'..1111..g..1111..',
+	'..1111.....1111..',
 	'..1111.....1111..',
 	'..1...........1..',
 	'..1m.m.....m.m1..',
@@ -600,7 +601,31 @@ var levels = {
 	'..111.......111..',
 	'..111.......111..',
 	'..111.......111..',
-	'..111.......111..'
+	'....1.......1....'
+	],2),
+	11:BuildLevel(
+	[
+	'..1111111111111..',
+	'..www1m1m1m1www..',
+	'..ww111111111ww..',
+	'..w11.......11w..',
+	'..w1..11111..1w..',
+	'..w1..1...1..1w..',
+	'..w1.........1w..',
+	'..w1.........1w..',
+	'..w1.........1w..',
+	'..w1.........1w..',
+	'..11.........11..',
+	'..m1.........1m..',
+	'..11.........11..',
+	'..m1.........1m..',
+	'..11.........11..',
+	'..111.......111..',
+	'..1w111...111w1..',
+	'..1www1...1www1..',
+	'..1www1...1www1..',
+	'..11111...11111..',
+	'......1...1......'
 	],2)
 	
 	
@@ -700,18 +725,24 @@ class Wipe{
 		this.color = color;
 	}
 }
+var messages={
+	gameOver:new Textbox('GAME OVER', Math.floor(C_WIDTH/5), Math.floor(C_HEIGHT/3)+GRID*4,0,8),
+	goose:new Textbox('YOUR GOOSE IS COOKED!!',C_WIDTH/2, Math.floor(C_HEIGHT/3)+64+GRID*4,10),
+	congrats:new Textbox('GREAT JOB!', Math.floor(C_WIDTH/5), Math.floor(C_HEIGHT/3)+GRID*4,0,8),
+	mightyCrab:new Textbox('YOU ARE A MIGHTY CRAB!',C_WIDTH/2, Math.floor(C_HEIGHT/3)+64+GRID*4,10)
+}
 class GameController{
 	constructor(){
 		this.player = new PlayerCrab(8,8);
 		this.babyCrab = new Sprite(SPRITE_DATA.baby_crab_dat,30)
 		this.score = 0;
+		this.winner = 0;
 		this.screenWipe = new Wipe(COLORS.orange);
 		this.currentLevel = 1;
 		this.state = 'startScreen'
 		this.resetScuttle();
-		this.endScreen =	[	new Textbox('GAME OVER', Math.floor(C_WIDTH/5), Math.floor(C_HEIGHT/3)+GRID*4,0,8),
-								new Textbox('YOUR GOOSE IS COOKED!!',C_WIDTH/2, Math.floor(C_HEIGHT/3)+64+GRID*4,10)
-							]
+		this.endScreen =[messages.gameOver,messages.goose]
+		this.winScreen =[messages.congrats,messages.mightyCrab] 
 	}
 	drawScore(){
 		if (this.score==0)return;
@@ -729,7 +760,6 @@ class GameController{
 			resetLevelOBJ(levels[this.currentLevel]);
 			this.currentLevel++
 			this.setPlayerPos()
-			
 		}
 	}
 	setPlayerPos(x=8,y=19){
@@ -756,10 +786,10 @@ class GameController{
 		this.setPlayerPos();
 		this.player.dead=0;
 		this.endScreen[1].resetText()
+		this.winScreen[1].resetText()
 		this.currentLevel = 1;
 		this.score = 0;
 	}
-	
 	addScore(){
 		this.score++;
 	}
@@ -793,6 +823,11 @@ function loop(){
 					GAME.screenWipe.resetWipe(COLORS.red)
 					GAME.resetScuttle();
 				}
+				if (GAME.winner){
+					GAME.state = 'win';
+					GAME.screenWipe.resetWipe(COLORS.blue)
+					GAME.resetScuttle();
+				}
 			}
 			GAME.screenWipe.draw();
 		break;
@@ -807,6 +842,21 @@ function loop(){
 			GAME.player.draw('white');
 			if(GAME.scuttleCheck()){
 				GAME.resetGame();
+				GAME.state = 'gameplay';
+			}
+		break;
+		case 'win':
+			GAME.screenWipe.draw();
+			GAME.player.draw();
+			ctx.fillStyle = 'white';
+			ctx.fillRect(C_WIDTH/6,C_HEIGHT/3+GRID*4+50,360,4)
+			GAME.winScreen[1].update();
+			GAME.winScreen.forEach(message =>{
+				message.draw();
+			})
+			if(GAME.scuttleCheck()){
+				GAME.resetGame();
+				GAME.winner = 0;
 				GAME.state = 'gameplay';
 			}
 		break;
