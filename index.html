@@ -18,6 +18,7 @@ var canvas = document.getElementById('gamewindow')
 var ctx = canvas.getContext('2d')
 
 const GRID = 32;
+const PX_SIZE = 4;
 const GRID_THIRD = Math.floor(GRID/3);
 const SCALE = 1;
 
@@ -41,7 +42,7 @@ const COLORS = {
 	orange3:'#f87858',
 	shadow:	'#a81000',
 	blue:	'#3cbcfc',
-	Dblue:	'#004058'
+	Dblue:	'#0e8bf9'//'#004058'
 }
 var controller = {
 	up: 0,
@@ -61,6 +62,8 @@ class Sprite{
 		this.img[this.currentFrame].forEach(block =>{
 			ctx.fillRect(block[0]+x,block[1]+y,block[2],block[3])
 		})
+	}
+	incrementTime(){
 		this.time++
 		if (this.time > this.maxTime){
 			this.time=0
@@ -70,6 +73,17 @@ class Sprite{
 }
 
 const SPRITE_DATA = {
+	baby_crab_dat:
+	[
+	//frame 1
+		[
+		[8,12,20,4],[10,8,4,4],[22,8,4,4],[8,16,20,12]
+		],
+	//frame 2
+		[
+		[8,8,20,4],[10,4,3,4],[23,4,3,4],[8,14,20,14],[8,10,6,4],[22,10,6,4]
+		]
+	],
 	crab_dat:
 	[
 	//frame 1
@@ -108,11 +122,6 @@ const SPRITE_DATA = {
 	]
 }
 
-const SPRITES = {
-	crab:new Sprite(SPRITE_DATA.crab_dat),
-	mine:new Sprite(SPRITE_DATA.mine_dat,30)
-}
-
 function collideCheck(obj1,obj2,dx=0,dy=0){
 	const 	x1 = obj1.x + obj1.offsetX,
 			y1 = obj1.y + obj1.offsetY,
@@ -140,6 +149,8 @@ class Block{
 		this.offsetX = offsetX;
 		this.offsetY = offsetY;
 		this.dead = 0;
+		this.alpha = 0;
+		this.alphaSign = -1
 	}
 	drawAlpha(color = 'white'){
 		ctx.fillStyle = color;
@@ -148,84 +159,136 @@ class Block{
 		ctx.fillRect(this.x,this.y,this.w,this.h)
 		ctx.restore()
 	}
-	
-}
-
-class Water extends Block{
-	constructor(x,y){
-		super(x,y);
-		this.color=COLORS.blue;
-		this.alpha = randINT(50)/100;
-		this.sign = -1;
+	loopAlpha(inc=.02,max=1){
+		this.alpha += this.alphaSign * inc
+		if (this.alpha < 0){
+			this.alpha = 0;
+			this.alphaSign = 1;
+		}else if (this.alpha > max){
+			this.alpha = max;
+			this.alphaSign = -1;
+		}
 	}
 	draw(){
 		ctx.fillStyle = this.color;
 		ctx.fillRect(this.x,this.y,this.w,this.h);
+	}
+}
+class Coin extends Block{
+	constructor(x,y){
+		super(x,y,4,4)
+		this.sprite = new Sprite(SPRITE_DATA.baby_crab_dat,30);
+		this.color = COLORS.red
+	}
+	draw(){
+		ctx.fillStyle = this.color
+		this.sprite.draw(this.x,this.y);
+		this.sprite.incrementTime();
+	}
+}
+class Water extends Block{
+	constructor(x,y,shadow=0){
+		super(x,y);
+		this.color=COLORS.blue;
+		this.alpha = randINT(50)/100;
+		if (shadow) this.makeShadow(shadow);
+		else this.shadow = 0
+	}
+	draw(){
+		super.draw()
 		this.drawAlpha()
-		this.alpha += this.sign * .005
-		if (this.alpha < 0){
-			this.alpha = 0;
-			this.sign = 1;
-		}else if (this.alpha > .5){
-			this.alpha = .5;
-			this.sign = -1;
+		this.loopAlpha(.005,.5)
+		if (this.shadow){
+			ctx.fillStyle = COLORS.Dblue
+			this.shadow.forEach(block=>{
+				ctx.fillRect(block[0],block[1],block[2],block[3])
+			})
+		}
+	}
+	makeShadow(shadow){
+		switch(shadow){
+			case 1:
+				this.shadow = [[this.x,this.y,GRID,PX_SIZE]]
+			break;
+			case 2:
+				this.shadow = [[this.x+GRID-PX_SIZE*2,this.y,PX_SIZE*2,GRID]]
+			break;
+			case 3:
+				this.shadow = [[this.x,this.y,GRID,PX_SIZE],[this.x+GRID-PX_SIZE*2,this.y,PX_SIZE*2,GRID]]
+			break;
 		}
 	}
 }
 class Wall extends Block{
-	constructor(x,y){
-		super(x,y)
+	constructor(x,y,breakable = 0){
+		super(x,y);
+		this.breakable = breakable;
 		this.color = COLORS.orange;
-		this.alpha = 0;
+		if(randINT(100) < 20)this.makeSpots();
 	}
 	draw(){
-		ctx.fillStyle = this.color
-		ctx.fillRect(this.x,this.y,this.w,this.h)
+		super.draw()
+		if (this.spots){
+			this.spots.forEach(block=>{
+				ctx.fillStyle = block[4];
+				ctx.fillRect(block[0],block[1],block[2],block[3])
+			})
+		}
 		if (this.alpha){
-			this.drawAlpha()
+			this.drawAlpha(COLORS.orange2)
 			this.alpha = Math.max(this.alpha-.05,0)
-		} 
+		}
 	}
 	drawShadow(){
 		const offset = 4;
 		ctx.fillStyle = COLORS.shadow
 		ctx.fillRect(this.x-offset*2,this.y+offset,this.w+offset*2,this.h)
 	}
+	makeSpots(){
+		this.spots = [];
+		const max = GRID/PX_SIZE-1;
+		var color = COLORS.orange2;
+		for (let n=0; n<2; n++){
+			for (let i=0; i<randINT(2)+1; i++){
+				this.spots.push([
+						this.x + randINT(max)*(PX_SIZE),
+						this.y + randINT(max)*PX_SIZE,
+						PX_SIZE,
+						PX_SIZE,
+						color
+					])
+			}
+			var color = COLORS.orange3;
+		}
+	}
 }
 
 class LandMine extends Block{
 	constructor(x,y){
-		super(x,y,GRID_THIRD,GRID_THIRD);
+		super(x,y,PX_SIZE,PX_SIZE);
 		this.sprite = new Sprite(SPRITE_DATA.mine_dat,30);
 		this.color = [COLORS.red,COLORS.red2]
-		this.bombSize = 12;
+		this.innerSquare = [this.x+PX_SIZE*2.5,this.y+PX_SIZE*2.5,PX_SIZE*3,PX_SIZE*3]
 		this.alpha = 1;
 		this.sign = -1;
 	}
 	draw(){
-		const SQUARE = [this.x+this.offsetX,this.y+this.offsetY,this.bombSize,this.bombSize]
 		ctx.fillStyle = this.color[0]
 		this.sprite.draw(this.x,this.y);
-		
+		this.sprite.incrementTime();
 		ctx.fillStyle = this.color[1]
 		ctx.save();
 		ctx.globalAlpha = this.alpha;
-		ctx.fillRect(...SQUARE);
+		ctx.fillRect(...this.innerSquare);
 		ctx.restore();
-		this.alpha += this.sign * .02
-		if (this.alpha < 0){
-			this.alpha = 0;
-			this.sign = 1;
-		}else if (this.alpha > 1){
-			this.alpha = 1;
-			this.sign = -1;
-		}
+		this.loopAlpha(.02)
 	}
 }
 
 class PlayerCrab extends Block{
 	constructor(x,y){
 		super(x,y,GRID_THIRD,GRID_THIRD)
+		this.sprite = new Sprite(SPRITE_DATA.crab_dat);
 		this.xSpeed = this.speedMax = 4;
 		this.ySpeed = 0;
 		this.color = COLORS.red;
@@ -237,18 +300,22 @@ class PlayerCrab extends Block{
 		const walls = GAME.getOBJ('walls');
 		const water = GAME.getOBJ('water');
 		const enemies = GAME.getOBJ('enemies');
+		const coins = GAME.getOBJ('coins')
 		var OBJ;
 		switch(this.state){
 			case 'walking':
 				this.screenCheck()
 				this.inputCheckY()
-				
+				if (OBJ = collideCheck(this,coins)){
+					OBJ.dead = true;
+					GAME.addScore();
+				}
 				if (OBJ = collideCheck(this,walls,0,0)){
 					OBJ.alpha = 1;
 					this.xSpeed *= -1;
+					if (OBJ.breakable)OBJ.dead=true;
 					}
 				this.x += this.xSpeed;
-		
 				if (OBJ = collideCheck(this,walls,0,this.ySpeed)){
 					OBJ.alpha = 1;
 					this.ySpeed = 0;
@@ -273,9 +340,10 @@ class PlayerCrab extends Block{
 		}
 	}
 	
-	draw(){
-		ctx.fillStyle = this.color;
-		SPRITES.crab.draw(this.x,this.y);
+	draw(color = this.color){
+		ctx.fillStyle = color;
+		this.sprite.draw(this.x,this.y);
+		this.sprite.incrementTime();
 	}
 	
 	screenCheck(){
@@ -286,7 +354,7 @@ class PlayerCrab extends Block{
 	
 	inputCheckY(){
 		const verticalMove = controller.down-controller.up
-		this.ySpeed = verticalMove * this.speedMax
+		this.ySpeed = verticalMove * 3
 		if (this.x < 0 || this.x+this.offsetX > C_WIDTH-this.offsetX) this.ySpeed = 0
 	}
 	
@@ -297,126 +365,318 @@ var levels = {
 	[
 	'...11.......11...',
 	'...11.......11...',
-	'1..11.......11...',
-	'1..11......111...',
-	'...11......w11...',
-	'...11......w11...',
-	'...111.....w11...',
-	'...111.....w11...',
-	'...11w.....w11...',
-	'...11w.....m11...',
+	'...11..c.11111...',
+	'...11......ww1...',
+	'...11.....1ww1...',
+	'...1.......ww1...',
+	'...1.......ww1...',
+	'...1..11...ww1...',
+	'...1.......ww1...',
+	'...11......ww1...',
+	'...11.....1ww1...',
+	'...11......ww1...',
+	'...11..111.ww1...',
+	'...11.......w1...',
+	'...11........1...',
+	'...11.....1.11...',
+	'...11.......11...',
+	'...11.......11...',
+	'..1C221...1111...',
+	'...1111...1111...',
+	'......1...1......'
+	],3),
+	2:BuildLevel(
+	[
+	'....1.......1....',
+	'....1.......1....',
+	'....1.....111....',
+	'....1.......1....',
+	'111.1....11111111',
+	'...11w...1c......',
+	'11.11w1..11111111',
+	'.1.11w1....11....',
+	'.1.11w..m..11....',
+	'.1.11w1.....1....',
+	'.1.11m......1....',
+	'1...2.......1....',
+	'.1111.......1....',
+	'....1m..1..m1....',
+	'....1...m...1....',
+	'....1.......1....',
+	'....1.......1....',
+	'....1.......1....',
+	'....1.1...1.1....',
+	'....111...111....'
+	],4),
+	3:BuildLevel(
+	[
+	'...11.......11...',
+	'...11c.m....11...',
+	'...11..m....11...',
+	'...11......111...',
+	'...11....mm111...',
+	'...11.......w1...',
+	'...11m.....1w1...',
+	'...111......w1...',
+	'...111......w1...',
+	'...11w......m1...',
 	'...11w.....111...',
-	'...11w.....111...',
+	'...11w..m..111...',
 	'...11w.....w11...',
 	'...11m.....w11...',
 	'...111.....m11...',
-	'1..111......11..1',
-	'1..11.......111.1',
+	'...111mm...111..',
 	'...11.......11...',
-	'...1111...1111...',
-	'...1111...1111...'
-	]),
+	'...11.......11...',
+	'...111.....111...',
+	'...111.....111...',
+	'.....1.....1.....'
+	],3),
 	
-	2:BuildLevel(
+	4:BuildLevel(
 	[
-	'1111111...1111111',
-	'.............1...',
-	'1................',
-	'1................',
+	'11111.......11111',
+	'..m...........m..',
+	'...1.........1...',
+	'......m........c.',
 	'.................',
-	'....1............',
+	'....1........m...',
+	'm...1............',
+	'..........m......',
+	'..c..............',
+	'...m........1....',
+	'.......m.........',
 	'.................',
+	'..1.........m....',
+	'.....m...........',
 	'.................',
-	'.................',
-	'........1........',
-	'.................',
-	'.................',
-	'....11111111.....',
-	'.................',
-	'.................',
+	'1111..........111',
+	'111............11',
 	'1...............1',
 	'1...............1',
-	'.................',
-	'.................',
-	'.................'
+	'1...............1',
+	'1...............1'
 	]),
 	
-	3:BuildLevel(
+	5:BuildLevel(
 	[
 	'.................',
 	'...1.............',
 	'..........1......',
-	'.................',
-	'.....111.....11..',
-	'....11.1.........',
-	'.................',
-	'............www11',
+	'........w........',
+	'...1.BBCw....11..',
+	'....11.1w........',
+	'11...............',
+	'11m.........www11',
 	'1wwwwwww....www11',
 	'1wwwwwww....www11',
-	'1w.............11',
-	'1w.............11',
-	'1w.......1......1',
-	'.w.........m....1',
-	'.w...............',
-	'1w.....1........1',
-	'.w.....1........1',
-	'1w...1111111....1',
+	'1ww..........m.11',
+	'1ww............11',
+	'1ww......1......1',
+	'.ww........m....1',
+	'.ww..............',
+	'1ww....111......1',
+	'.ww....111......1',
+	'1ww..1111111....1',
 	'1...............1',
 	'111111.....111111',
 	'.....1.....1.....'
 	]),
 	
-	4:BuildLevel(
+	6:BuildLevel(
 	[
+	'1111.........1111',
+	'1111.........1111',
 	'1...............1',
-	'1...............1',
-	'1...............1',
-	'1...............1',
-	'1......111......1',
+	'1....mm111mm....1',
 	'1.......1.......1',
-	'1.......1.......1',
-	'1....1111111....1',
-	'1.1..m.....m..1.1',
+	'1m......1......m1',
+	'1.....m.1.m.....1',
+	'1.BBB11mwm11BBB.1',
+	'1.1..m..c..m..1.1',
 	'1.1.....m.....1.1',
-	'1.1111111111111.1',
+	'1.1111mmmmm1111.1',
 	'1...............1',
-	'11111111..1111111',
-	'1w..............1',
-	'1w..111111111...1',
-	'1w..............1',
-	'1............1..1',
+	'1111111...1111111',
 	'1...............1',
-	'1.....1.........1',
+	'1...111111111...1',
+	'1.....m..m......1',
+	'1mm1.........1mm1',
+	'1...............1',
+	'1.....1...1.....1',
+	'1...............1',
 	'1...............1'
-	])
+	]),
+	7:BuildLevel(
+	[
+	'11.............11',
+	'11.............11',
+	'11..m......11..11',
+	'1wc.m...m11111111',
+	'1w.1............1',
+	'1w.1mmmmmm111...1',
+	'1w..............1',
+	'1w1......m1111111',
+	'.w...........m...',
+	'.w.............c.',
+	'.w...........m...',
+	'1w.........1..m.1',
+	'1w............m.1',
+	'1w...1...m......1',
+	'1w1111...m......1',
+	'...11111111111...',
+	'.................',
+	'11111........1111',
+	'12BC1........1111',
+	'12111........1111',
+	'1...............1'
+	]),
+	8:BuildLevel(
+	[
+	'.1111111.1111111.',
+	'.1111111.1111111.',
+	'.1111111.1111111.',
+	'.1111111.1111111.',
+	'.1.............1.',
+	'.1m.......mm...1.',
+	'.1m.....1......1.',
+	'.1m.....m....mm1.',
+	'.1......m......1.',
+	'.1m.....1.....m1.',
+	'.1m.....1.....m1.',
+	'.1m.....w.....m1.',
+	'.1......w..c..m1.',
+	'.1m.....wwwwwww1.',
+	'.1m......wwwwww1.',
+	'.1m............1.',
+	'.11111.....11111.',
+	'.111111...111111.',
+	'.1..1.......1..1.',
+	'.1..1.......1..1.'
+	],1),
+	9:BuildLevel(
+	[
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..',
+	'..1...........1..'
+	],2),
+	10:BuildLevel(
+	[
+	'..1111..g..1111..',
+	'..1111.....1111..',
+	'..1...........1..',
+	'..1m.m.....m.m1..',
+	'..1.c...m...c.1..',
+	'..1mmm.....mmm1..',
+	'..1.....m.....1..',
+	'..1mmm.....mmm1..',
+	'..1...........1..',
+	'..1.m.m.m....m1..',
+	'..1.....m.....1..',
+	'..1c.m........1..',
+	'..1mm.......mm1..',
+	'..1.....m.....1..',
+	'..1...........1..',
+	'..1mm.......mm1..',
+	'..111.......111..',
+	'..111.......111..',
+	'..111.......111..',
+	'..111.......111..',
+	'..111.......111..'
+	],2)
+	
+	
 }
 
-function BuildLevel(map){
+function BuildLevel(map,border = 0){
 	var walls = [];
+	var fakeWalls = [];
+	var breakWalls = [];
 	var enemies = [];
 	var water = [];
+	var coins = [];
 	for (let row = 0; row<map.length; row++){
-		for (let col=0; col < map[row].length; col++){
+		const maxCol = map[row].length
+		for (let col=0; col < maxCol; col++){
 			switch(map[row][col]){
-				case '1':walls.push(new Wall(col,row))
+				case '1':
+					walls.push(new Wall(col,row))
 				break;
-				case'w':water.push(new Water(col,row))
+				case '2':
+					fakeWalls.push(new Wall(col,row))
 				break;
-				case'm':enemies.push(new LandMine(col,row))
+				case 'B':
+					breakWalls.push(new Wall(col,row,1))
 				break;
+				case'w':
+					var shadowSize = 0;
+					if (row == 0 || map[row-1][col]!='w'){
+						shadowSize += 1;
+					}
+					if (col == maxCol || map[row][col+1] !='w')
+						shadowSize += 2;
+					water.push(new Water(col,row,shadowSize))
+				break;
+				case'm':
+					enemies.push(new LandMine(col,row))
+				break;
+				case 'c':
+					coins.push(new Coin(col,row));
+				break;
+				case 'C':
+					coins.push(new Coin(col,row));
+					breakWalls.push(new Wall(col,row,1));
 			}
 		}
 	}
-	return {enemies:enemies, walls:walls, water:water, allOBJs:[...walls,...water,...enemies]}
+	var allWalls = [...walls,...breakWalls]
+	return {
+		temp:[],
+		border:border,
+		enemies:enemies,
+		breakWalls:breakWalls,
+		walls:allWalls, 
+		water:water, 
+		coins:coins,
+		allOBJs:[...coins,...allWalls,...fakeWalls,...water,...enemies]
+		}
 }
 function drawLevel(level){
-	
 	level.walls.forEach(obj => {
-		obj.drawShadow();
+		if (!obj.dead) obj.drawShadow();
 	})
-	
 	level.allOBJs.forEach(obj => {
 		if (!obj.dead) obj.draw();
+	})
+	if (level.border){
+		var size = level.border*GRID
+		ctx.fillStyle = COLORS.orange
+		ctx.fillRect(0,0,size,C_HEIGHT)
+		ctx.fillRect(C_WIDTH,0,-size,C_HEIGHT)
+	}
+}
+function resetLevelOBJ(level){
+	level.temp = [...level.breakWalls,...level.coins]
+	level.temp.forEach(obj =>{
+		obj.dead = 0;
 	})
 }
 class Wipe{
@@ -443,25 +703,36 @@ class Wipe{
 class GameController{
 	constructor(){
 		this.player = new PlayerCrab(8,8);
+		this.babyCrab = new Sprite(SPRITE_DATA.baby_crab_dat,30)
+		this.score = 0;
 		this.screenWipe = new Wipe(COLORS.orange);
 		this.currentLevel = 1;
 		this.state = 'startScreen'
 		this.resetScuttle();
-		this.endScreen =	[	new Textbox('GAME OVER', Math.floor(C_WIDTH/5), Math.floor(C_HEIGHT/3),0,8),
-								new Textbox('YOUR GOOSE IS COOKED!!',C_WIDTH/2, Math.floor(C_HEIGHT/3)+64,10)
+		this.endScreen =	[	new Textbox('GAME OVER', Math.floor(C_WIDTH/5), Math.floor(C_HEIGHT/3)+GRID*4,0,8),
+								new Textbox('YOUR GOOSE IS COOKED!!',C_WIDTH/2, Math.floor(C_HEIGHT/3)+64+GRID*4,10)
 							]
+	}
+	drawScore(){
+		if (this.score==0)return;
+		for (let i=0; i<this.score; i++){
+			this.babyCrab.draw(0,i*GRID)
+		}
+		this.babyCrab.incrementTime()
 	}
 	getOBJ(obj){
 		return levels[this.currentLevel][obj];
 	}
 	checkNextLevel(){
 		if (levels[this.currentLevel+1] == undefined )return
-		if (this.player.y < 0 - GRID){
+		if (this.player.y < 0 - GRID/2){
+			resetLevelOBJ(levels[this.currentLevel]);
 			this.currentLevel++
-			this.player.y = C_HEIGHT
+			this.setPlayerPos()
+			
 		}
 	}
-	setPlayerPos(x,y){
+	setPlayerPos(x=8,y=19){
 		this.player.x = x * GRID;
 		this.player.y = y * GRID;
 	}
@@ -474,10 +745,23 @@ class GameController{
 			this.player.x += this.scuttleSpeed
 			this.scuttleSpeed=Math.min(this.scuttleSpeed + .5, 12)
 		}
+		if(this.player.x > C_WIDTH+GRID*4) return true;
 	}
 	resetScuttle(){
+		this.setPlayerPos(8,8);
 		this.scuttleStart = 0;
 		this.scuttleSpeed = -5;
+	}
+	resetGame(){
+		this.setPlayerPos();
+		this.player.dead=0;
+		this.endScreen[1].resetText()
+		this.currentLevel = 1;
+		this.score = 0;
+	}
+	
+	addScore(){
+		this.score++;
 	}
 }
 var GAME = new GameController
@@ -489,12 +773,9 @@ function loop(){
 		case 'startScreen':
 			GAME.screenWipe.draw();
 			GAME.player.draw();
-			GAME.scuttleCheck();
-			
-			if(GAME.player.x > C_WIDTH+GRID*4){
-				GAME.setPlayerPos(9,19);
+			if(GAME.scuttleCheck()){
+				GAME.setPlayerPos();
 				GAME.state = 'gameplay';
-				GAME.resetScuttle();
 			}
 		
 		break;
@@ -502,31 +783,31 @@ function loop(){
 			drawLevel(levels[GAME.currentLevel])
 			if (GAME.screenWipe.h !=0) GAME.screenWipe.update()
 			else{
-				GAME.player.draw()
-				GAME.player.update()
-				GAME.checkNextLevel()
+				GAME.player.draw();
+				GAME.drawScore();
+				GAME.player.update();
+				GAME.checkNextLevel();
 				if (GAME.player.dead){
+					resetLevelOBJ(levels[GAME.currentLevel]);
 					GAME.state = 'gameOver';
 					GAME.screenWipe.resetWipe(COLORS.red)
+					GAME.resetScuttle();
 				}
 			}
 			GAME.screenWipe.draw();
 		break;
 		case 'gameOver':
 			GAME.screenWipe.draw();
-			ctx.fillStyle = 'white'
+			ctx.fillStyle = 'white';
 			GAME.endScreen[1].update();
 			GAME.endScreen.forEach(message =>{
 				message.draw();
 			})
-			ctx.fillRect(C_WIDTH/6,C_HEIGHT/3+50,360,4)
-			if(controller.up){
-				controller.up=0
-				GAME.setPlayerPos(9,19);
-				GAME.player.dead=0;
+			ctx.fillRect(C_WIDTH/6,C_HEIGHT/3+GRID*4+50,360,4)
+			GAME.player.draw('white');
+			if(GAME.scuttleCheck()){
+				GAME.resetGame();
 				GAME.state = 'gameplay';
-				GAME.endScreen[1].resetText()
-				GAME.currentLevel = 1;
 			}
 		break;
 	}
@@ -538,17 +819,18 @@ document.addEventListener('keydown',(e)=>{
 	if(e.keyCode == 38){
 		controller.up = 1
 	}
-	else if(e.keyCode == 40){
+	if(e.keyCode == 40){
 		controller.down = 1
 	}
 })
 
 document.addEventListener('keyup',(e)=>{
-	controller.pressed = 0;
-	controller.down = 0;
-	controller.up = 0;
+	if(e.keyCode == 38){
+		controller.up = 0
+	}
+	if(e.keyCode == 40){
+		controller.down = 0
+	}
 })
-
-
 </SCRIPT>
 </HTML>
